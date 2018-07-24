@@ -1,35 +1,34 @@
 library(rgdal)
+library(rgeos)
+library(gdata)
 
-fgdb = "C:/Users/Spencer/Documents/Research/SI/gis_nwm_v11/nwm_v11.gdb"
-setwd("C:/Users/Spencer/Documents/Research/SI/R/NWM_Retro_Analysis")
+fgdb = "data/NWMLowFlows.gdb"
 
-# List all feature classes in a file geodatabase
+# List all feature classes in the file geodatabase
 subset(ogrDrivers(), grepl("GDB", name))
 fc_list = ogrListLayers(fgdb)
 print(fc_list)
 
-# Read in the States and NHD stream network feature classes
-States = readOGR(dsn=fgdb,layer="States")
-NHD = readOGR(dsn=fgdb,layer="NHD_CA_All")
+# Select state of interest
+states = readOGR(dsn=fgdb,layer="States")
+state_subset = states[which(states$NAME=="California"),]
 
-# Select state of interest and plot it
-State_Select = States[which(States$STATE_ABBR=="CA"),]
+# Select USGS gages (subset to the state of interest)
+usgsgages = readOGR(dsn=fgdb,layer="CAUSGSStreamgages")
 
-# Subset the NHD stream network to the boundary of the state selected above
-library(rgeos)
-stream_subset = NHD[State_Select,]
+# Select NHD stream network (subset to the state of interest)
+streams = readOGR(dsn=fgdb,layer="CAnwmchannels")
 
-# Subset the NHD stream network in the state by a user defined stream order then overlay the streams on the state map
-stream_subset = stream_subset[stream_subset$order_ > 3,]
+# Subset the NHD stream network in the state by a user-defined stream order then overlay the streams on the state map
+stream_subset = streams[streams$order_ >=1,]
 
 # Subset the above subset to select only the streams in NHD that have a corresponding USGS gage
-stream_subset = stream_subset[(stream_subset$gages != " "),]
-stream_subset$gages = factor(stream_subset$gages)
+stream_w_gages = stream_subset[(stream_subset$gages != ""),]
+stream_w_gages$gages = factor(stream_w_gages$gages)
 
 # Clean up the subset of gaged streams to ensure there are no NULL data values
-library(gdata)
-stream_subset$gages = trim(stream_subset$gages, recode.factor = TRUE)
-stream_subset = stream_subset[(stream_subset$gages != ""),]
+stream_w_gages$gages = trim(stream_w_gages$gages, recode.factor = TRUE)
+stream_w_gages = stream_w_gages[(stream_w_gages$gages != ""),]
 
 # Create an index data table linking COMID (aka: feature_ID) to GageID to be used in NWM data retrieval
 COMID2gage_index = data.frame(stream_subset$feature_id,stream_subset$gages)
